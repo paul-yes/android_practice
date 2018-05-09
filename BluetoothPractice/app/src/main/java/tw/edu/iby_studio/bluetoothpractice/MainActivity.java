@@ -14,6 +14,7 @@ package tw.edu.iby_studio.bluetoothpractice;
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -24,11 +25,16 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Set;
+import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -40,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final int REQUEST_ENABLE_BT = 1;
     private final int BLUETOOTH_PERMISSION_REQ = 8;
+    private final String HC08_UUID = "FFE1";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,23 +102,21 @@ public class MainActivity extends AppCompatActivity {
         }
 
         Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
-        if(pairedDevices.size()>0){
+        if(pairedDevices.size() > 0){
             for(BluetoothDevice device:pairedDevices){
                 if(device.getAddress().equals("94:E3:6D:9C:78:44")){
                     mBluetoothDevice = device;
-                    Toast.makeText(this, "Find a matching Bluetooth Device.", Toast.LENGTH_SHORT).show();
+                    startupDevice();
                 }
                 textview.setText(textview.getText() + "\n" + device.getName() + "/" + device.getAddress());
             }
         }
 
-        if(mBluetoothDevice!=null){
+        if(mBluetoothDevice == null){
             IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
             registerReceiver(mReceiver, filter);
             mBluetoothAdapter.startDiscovery();
         }
-
-
 
 
     }
@@ -126,13 +131,145 @@ public class MainActivity extends AppCompatActivity {
                 BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 textview.setText(textview.getText() + "\n" + device.getName() + "/" + device.getAddress());
                 if(device.getAddress().equals("94:E3:6D:9C:78:44")){
-                    mBluetoothDevice = device;
                     mBluetoothAdapter.cancelDiscovery();
-                    Toast.makeText(MainActivity.this, "Find a matching Bluetooth Device.", Toast.LENGTH_SHORT).show();
+                    mBluetoothDevice = device;
+                    startupDevice();
                 }
             }
         }
     };
+
+    public class ConnectThread extends Thread{
+        private BluetoothDevice mmDevice;
+        private BluetoothSocket mmSocket;
+
+        public ConnectThread(BluetoothDevice device){
+            BluetoothSocket tmpSocket = null;
+
+            mmDevice = device;
+
+            try{
+                tmpSocket = device.createRfcommSocketToServiceRecord(UUID.fromString(HC08_UUID));
+            } catch (IOException e) {
+                Log.e("ConnectThread", e.toString());
+            }
+
+            mmSocket = tmpSocket;
+
+        }
+
+        public void run(){
+            mBluetoothAdapter.cancelDiscovery();
+
+            try {
+                mmSocket.connect();
+                ConnectedThread connectedThread = new ConnectedThread(mmSocket);
+                connectedThread.run();
+            } catch (IOException e) {
+                Log.e("ConnectThread", e.toString());
+                cancel();
+            }
+        }
+
+        public void cancel(){
+
+            try {
+                mmSocket.close();
+            } catch (IOException e) {
+                Log.e("ConnectThread", e.toString());
+            }
+
+        }
+
+    }
+
+    public class ConnectedThread extends Thread{
+        private final InputStream mmInStream;
+        private final OutputStream mmOutStream;
+        private final BluetoothSocket mmSocket;
+        private byte[] mmBuffer;
+
+        public ConnectedThread(BluetoothSocket socket){
+            InputStream tmpInStream = null;
+            OutputStream tmpOutStream = null;
+
+            mmSocket = socket;
+
+            try {
+                tmpInStream = mmSocket.getInputStream();
+            } catch (IOException e) {
+                Log.e("ConnectedThread", e.toString());
+            }
+
+            try {
+                tmpOutStream = mmSocket.getOutputStream();
+            } catch (IOException e) {
+                Log.e("ConnectedThread", e.toString());
+            }
+
+            mmInStream = tmpInStream;
+            mmOutStream = tmpOutStream;
+
+        }
+
+        public void run(){
+            mmBuffer = new byte[1024];
+            int numBytes;
+
+            while(true){
+                try {
+                    numBytes = mmInStream.read(mmBuffer);
+                    mReadProcess.setup(mmBuffer);
+                    runOnUiThread(mReadProcess);
+                } catch (IOException e) {
+                    Log.e("ConnectedThread", e.toString());
+                }
+            }
+
+        }
+
+        public void write(byte[] bytes){
+            try {
+                mmOutStream.write(bytes);
+            } catch (IOException e) {
+                Log.e("ConnectedThread", e.toString());
+            }
+        }
+
+        public void cancel(){
+
+            try {
+                mmSocket.close();
+                mmInStream.close();
+                mmOutStream.close();
+            } catch (IOException e) {
+                Log.e("ConnectedThread", e.toString());
+            }
+
+        }
+
+    }
+
+    private ReadProcess mReadProcess = new ReadProcess();
+    public class ReadProcess implements Runnable{
+        byte[] mData = new byte[1024];
+
+        public void setup(byte[] bytes){
+            mData = bytes;
+        }
+
+        @Override
+        public void run() {
+            textview.setText(textview.getText() + "\n" + mData.toString());
+        }
+    }
+
+    public void startupDevice(){
+        Toast.makeText(MainActivity.this, "Find a matching Bluetooth Device.", Toast.LENGTH_SHORT).show();
+        ConnectThread mConnectThread = new ConnectThread(mBluetoothDevice);
+        mConnectThread.run();
+    }
+
 
 
 }
