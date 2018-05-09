@@ -35,6 +35,9 @@ public class MainActivity extends AppCompatActivity {
     private Button button;
     private TextView textview;
 
+    private BluetoothAdapter mBluetoothAdapter = null;
+    private BluetoothDevice mBluetoothDevice = null;
+
     private final int REQUEST_ENABLE_BT = 1;
     private final int BLUETOOTH_PERMISSION_REQ = 8;
 
@@ -79,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void bluetoothSetup(){
-        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (mBluetoothAdapter == null){
             Toast.makeText(this, "No Bluetooth in this device.", Toast.LENGTH_SHORT).show();
             return;
@@ -88,20 +91,28 @@ public class MainActivity extends AppCompatActivity {
         if (!mBluetoothAdapter.enable()){
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+            Toast.makeText(this, "Enable Bluetooth.", Toast.LENGTH_SHORT).show();
         }
 
         Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
         if(pairedDevices.size()>0){
             for(BluetoothDevice device:pairedDevices){
+                if(device.getAddress().equals("94:E3:6D:9C:78:44")){
+                    mBluetoothDevice = device;
+                    Toast.makeText(this, "Find a matching Bluetooth Device.", Toast.LENGTH_SHORT).show();
+                }
                 textview.setText(textview.getText() + "\n" + device.getName() + "/" + device.getAddress());
             }
         }
 
+        if(mBluetoothDevice!=null){
+            IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+            registerReceiver(mReceiver, filter);
+            mBluetoothAdapter.startDiscovery();
+        }
 
-        IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
-        registerReceiver(mReceiver, filter);
 
-        mBluetoothAdapter.startDiscovery();
+
 
     }
 
@@ -114,6 +125,11 @@ public class MainActivity extends AppCompatActivity {
             if(BluetoothDevice.ACTION_FOUND.equals(action)){
                 BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 textview.setText(textview.getText() + "\n" + device.getName() + "/" + device.getAddress());
+                if(device.getAddress().equals("94:E3:6D:9C:78:44")){
+                    mBluetoothDevice = device;
+                    mBluetoothAdapter.cancelDiscovery();
+                    Toast.makeText(MainActivity.this, "Find a matching Bluetooth Device.", Toast.LENGTH_SHORT).show();
+                }
             }
         }
     };
