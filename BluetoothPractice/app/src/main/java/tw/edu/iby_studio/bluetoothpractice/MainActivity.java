@@ -102,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
         registerReceiver(mReceiver, filter);
 
         mBluetoothAdapter.startDiscovery();
-        
+
     }
 
 
