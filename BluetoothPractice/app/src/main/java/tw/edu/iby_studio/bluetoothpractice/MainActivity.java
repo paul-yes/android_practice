@@ -46,7 +46,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final int REQUEST_ENABLE_BT = 1;
     private final int BLUETOOTH_PERMISSION_REQ = 8;
-    private final String HC08_UUID = "FFE1";
+    private final String HC08_UUID = "0000FFE1-0000-1000-8000-00805F9B34FB";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -121,7 +121,11 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-
+    public void startupDevice(){
+        Toast.makeText(MainActivity.this, "Find a matching Bluetooth Device.", Toast.LENGTH_SHORT).show();
+        ConnectThread mConnectThread = new ConnectThread(mBluetoothDevice);
+        mConnectThread.start();
+    }
 
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override
@@ -139,6 +143,8 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+
+
     public class ConnectThread extends Thread{
         private BluetoothDevice mmDevice;
         private BluetoothSocket mmSocket;
@@ -151,7 +157,7 @@ public class MainActivity extends AppCompatActivity {
             try{
                 tmpSocket = device.createRfcommSocketToServiceRecord(UUID.fromString(HC08_UUID));
             } catch (IOException e) {
-                Log.e("ConnectThread", e.toString());
+                Log.e("ConnectThread-1", e.getMessage());
             }
 
             mmSocket = tmpSocket;
@@ -162,13 +168,24 @@ public class MainActivity extends AppCompatActivity {
             mBluetoothAdapter.cancelDiscovery();
 
             try {
+                //Android 4.2↓
                 mmSocket.connect();
-                ConnectedThread connectedThread = new ConnectedThread(mmSocket);
-                connectedThread.run();
+                Log.e("ConnectThread", "Connected");
             } catch (IOException e) {
-                Log.e("ConnectThread", e.toString());
-                cancel();
+                //Anrdroid 4.2↑
+                Log.e("ConnectThread-2", e.getMessage());
+                try {
+                    mmSocket = (BluetoothSocket)mmDevice.getClass().getMethod("createRfcommSocket", new Class[]{int.class}).invoke(mmDevice, 1);
+                    mmSocket.connect();
+                    Log.e("ConnectThread", "Connected");
+                } catch (Exception e2) {
+                    Log.e("ConnectThread-21", e.getMessage());
+                    cancel();
+                }
             }
+
+            ConnectedThread connectedThread = new ConnectedThread(mmSocket);
+            connectedThread.start();
         }
 
         public void cancel(){
@@ -176,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 mmSocket.close();
             } catch (IOException e) {
-                Log.e("ConnectThread", e.toString());
+                Log.e("ConnectThread-3", e.getMessage());
             }
 
         }
@@ -198,13 +215,13 @@ public class MainActivity extends AppCompatActivity {
             try {
                 tmpInStream = mmSocket.getInputStream();
             } catch (IOException e) {
-                Log.e("ConnectedThread", e.toString());
+                Log.e("ConnectedThread", e.getMessage());
             }
 
             try {
                 tmpOutStream = mmSocket.getOutputStream();
             } catch (IOException e) {
-                Log.e("ConnectedThread", e.toString());
+                Log.e("ConnectedThread", e.getMessage());
             }
 
             mmInStream = tmpInStream;
@@ -222,7 +239,7 @@ public class MainActivity extends AppCompatActivity {
                     mReadProcess.setup(mmBuffer);
                     runOnUiThread(mReadProcess);
                 } catch (IOException e) {
-                    Log.e("ConnectedThread", e.toString());
+                    Log.e("ConnectedThread", e.getMessage());
                 }
             }
 
@@ -232,7 +249,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 mmOutStream.write(bytes);
             } catch (IOException e) {
-                Log.e("ConnectedThread", e.toString());
+                Log.e("ConnectedThread", e.getMessage());
             }
         }
 
@@ -243,7 +260,7 @@ public class MainActivity extends AppCompatActivity {
                 mmInStream.close();
                 mmOutStream.close();
             } catch (IOException e) {
-                Log.e("ConnectedThread", e.toString());
+                Log.e("ConnectedThread", e.getMessage());
             }
 
         }
@@ -264,11 +281,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void startupDevice(){
-        Toast.makeText(MainActivity.this, "Find a matching Bluetooth Device.", Toast.LENGTH_SHORT).show();
-        ConnectThread mConnectThread = new ConnectThread(mBluetoothDevice);
-        mConnectThread.run();
-    }
+
 
 
 
